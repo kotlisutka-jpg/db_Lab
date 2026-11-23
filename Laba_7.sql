@@ -1,0 +1,101 @@
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public;
+
+CREATE TABLE Client (
+    ID SERIAL PRIMARY KEY,
+    Fname VARCHAR(100) NOT NULL,
+    Lname VARCHAR(100) NOT NULL,
+    phone_number VARCHAR(20) NOT NULL UNIQUE,
+    bonus_balance NUMERIC(10, 2) DEFAULT 0.00 CHECK (bonus_balance >= 0)
+);
+
+CREATE TABLE Track (
+    Number_track INTEGER PRIMARY KEY CHECK (Number_track > 0),
+    review TEXT,
+    Operational_status VARCHAR(50) NOT NULL DEFAULT 'рабочая'  	
+        CHECK (Operational_status IN ('рабочая', 'нерабочая', 'на ремонте')),
+    Capacity INTEGER NOT NULL CHECK (Capacity > 0),
+    Crib_bumpers BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE Discount (
+    ID SERIAL PRIMARY KEY,
+    Type_Discount VARCHAR(50) NOT NULL 
+        CHECK (Type_Discount IN ('льготная', 'по дню недели', 'накопительная бонусная')),
+    Magnitude NUMERIC(5, 2) NOT NULL CHECK (Magnitude >= 0 AND Magnitude <= 100),
+    Condition_for_obtaining TEXT NOT NULL
+);
+
+CREATE TABLE Workers (
+    ID SERIAL PRIMARY KEY,
+    Job_title VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE Footwear (
+    ID SERIAL PRIMARY KEY,
+    Shoe_size NUMERIC(3, 1) NOT NULL UNIQUE CHECK (Shoe_size BETWEEN 25.0 AND 50.0),
+    Total_quantity INTEGER NOT NULL CHECK (Total_quantity >= 0),
+    Available_quantity INTEGER NOT NULL CHECK (Available_quantity >= 0 AND Available_quantity <= Total_quantity)
+);
+
+CREATE TABLE Reservation (
+    ID SERIAL PRIMARY KEY,
+    Client_id INTEGER NOT NULL REFERENCES Client(ID) ON DELETE CASCADE,
+    Track_number INTEGER NOT NULL REFERENCES Track(Number_track) ON DELETE RESTRICT,
+    Registration_Date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    Booking_status VARCHAR(50) NOT NULL DEFAULT 'ожидает предоплаты'
+        CHECK (Booking_status IN ('ожидает предоплаты', 'внесена предоплата', 'оплачено полностью', 'завершено', 'аннулировано')),
+    Booking_duration INTEGER NOT NULL CHECK (Booking_duration IN (1, 2)),
+    Time_type TIMESTAMP NOT NULL,
+    Prepayment NUMERIC(10, 2) NOT NULL DEFAULT 0.00 CHECK (Prepayment >= 0)
+);
+
+CREATE TABLE Game (
+    ID SERIAL PRIMARY KEY,
+    Team_name VARCHAR(150) NOT NULL,
+    Client_id INTEGER NOT NULL REFERENCES Client(ID) ON DELETE CASCADE,
+    Reservation_id INTEGER UNIQUE REFERENCES Reservation(ID) ON DELETE SET NULL,
+    Discount_id INTEGER REFERENCES Discount(ID) ON DELETE SET NULL,
+    Track_number INTEGER NOT NULL REFERENCES Track(Number_track) ON DELETE RESTRICT,
+    type_footwear VARCHAR(50) NOT NULL CHECK (type_footwear IN ('своя обувь', 'аренда')),
+    Text TEXT,
+    total_order NUMERIC(10, 2) NOT NULL DEFAULT 0.00 CHECK (total_order >= 0)
+);
+
+CREATE TABLE Game_Footwear (
+    Game_id INTEGER NOT NULL REFERENCES Game(ID) ON DELETE CASCADE,
+    Footwear_id INTEGER NOT NULL REFERENCES Footwear(ID) ON DELETE RESTRICT,
+    Quantity_rented INTEGER NOT NULL DEFAULT 1 CHECK (Quantity_rented > 0),
+    PRIMARY KEY (Game_id, Footwear_id)
+);
+
+CREATE TABLE Oversees_G (
+    Worker_id INTEGER NOT NULL REFERENCES Workers(ID) ON DELETE CASCADE,
+    Game_id INTEGER NOT NULL REFERENCES Game(ID) ON DELETE CASCADE,
+    PRIMARY KEY (Worker_id, Game_id)
+);
+
+CREATE TABLE Oversees_R (
+    Worker_id INTEGER NOT NULL REFERENCES Workers(ID) ON DELETE CASCADE,
+    Reservation_id INTEGER NOT NULL REFERENCES Reservation(ID) ON DELETE CASCADE,
+    PRIMARY KEY (Worker_id, Reservation_id)
+);
+
+CREATE INDEX idx_reservation_client ON Reservation(Client_id);
+CREATE INDEX idx_reservation_track_time ON Reservation(Track_number, Time_type);
+CREATE INDEX idx_game_client ON Game(Client_id);
+
+CREATE VIEW v_active_reservations AS
+SELECT 
+    r.ID AS reservation_id,
+    c.Fname || ' ' || c.Lname AS client_name,
+    c.phone_number,
+    r.Track_number,
+    r.Time_type AS game_start,
+    r.Booking_duration,
+    r.Booking_status
+FROM Reservation r
+JOIN Client c ON r.Client_id = c.ID
+WHERE r.Booking_status NOT IN ('аннулировано', 'завершено');
+
+
